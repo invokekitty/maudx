@@ -535,9 +535,11 @@ impl DiagnosticParse for ElementName {
     fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>) -> syn::Result<Self> {
         if input.peek(Ident::peek_any) {
             let ident = input.fork().call(Ident::parse_any)?;
-            if let Some(true) = ident.to_string().chars().next().map(char::is_uppercase) {
-                let _ = input.call(Ident::parse_any);
-                Ok(Self::Component(ident))
+            let str = ident.to_string();
+            if let Some(true) = str.chars().next().map(char::is_uppercase) {
+                Ok(Self::Component(input.call(Ident::parse_any)?))
+            } else if str.contains("::") {
+                Ok(Self::Component(input.call(Ident::parse_any)?))
             } else {
                 Ok(Self::Html(input.diagnostic_parse(diagnostics)?))
             }

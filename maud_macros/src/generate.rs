@@ -92,8 +92,19 @@ impl Generator {
     }
 
     fn component(&self, component: Element, name: Ident, build: &mut Builder) {
-        let (_, _, attrs) = split_attrs(component.attrs);
+        if let Some(fields) = self.component_attrs(component) {
+            self.splice(parse_quote!(#name { #fields }), build);
+        } else {
+            self.splice(parse_quote!(#name), build);
+        }
+    }
 
+    fn component_attrs(&self, component: Element) -> Option<TokenStream> {
+        let (_, _, attrs) = split_attrs(component.attrs);
+        if attrs.is_empty() && let ElementBody::Void(_) = component.body { 
+            return None; 
+        }
+        
         let mut propertieses = self.builder();
 
         for (name, attr_type) in attrs {
@@ -124,8 +135,7 @@ impl Generator {
             });
         }
 
-        let propertieses = propertieses.finish();
-        self.splice(parse_quote!(#name { #propertieses }), build);
+        Some(propertieses.finish())
     }
 
     fn name(&self, name: HtmlName, build: &mut Builder) {
