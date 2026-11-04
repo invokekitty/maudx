@@ -4,13 +4,7 @@ use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::ToTokens;
 use syn::{
-    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed,
-    ext::IdentExt,
-    parenthesized,
-    parse::{Lookahead1, Parse, ParseStream},
-    punctuated::{Pair, Punctuated},
-    spanned::Spanned,
-    token::{
+    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
         At, Brace, Bracket, Colon, Comma, Dot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus,
         Paren, Pound, Question, Semi, Slash, While,
     },
@@ -79,7 +73,7 @@ impl<E: MaybeElement> Markup<E> {
         } else if lookahead.peek(Lit) {
             input.diagnostic_parse(diagnostics).map(Self::Lit)
         } else if lookahead.peek(Paren) {
-            let content;
+            let content: ParseBuffer;
             Ok(Self::Splice {
                 paren_token: parenthesized!(content in input),
                 expr: content.parse()?,
@@ -169,9 +163,9 @@ impl ToTokens for NoElement {
 
 #[derive(Debug, Clone)]
 pub struct Element {
-    pub name: Option<HtmlName>,
+    pub name: ElementName,
     pub attrs: Vec<Attribute>,
-    pub body: ElementBody,
+    pub body: ElementBody
 }
 
 impl From<NoElement> for Element {
@@ -198,11 +192,7 @@ impl DiagnosticParse for Element {
         diagnostics: &mut Vec<Diagnostic>,
     ) -> syn::Result<Self> {
         Ok(Self {
-            name: if input.peek(Ident::peek_any) {
-                Some(input.diagnostic_parse(diagnostics)?)
-            } else {
-                None
-            },
+            name: input.diagnostic_parse(diagnostics)?,
             attrs: {
                 let mut id_pushed = false;
                 let mut attrs = Vec::new();
@@ -250,8 +240,10 @@ impl DiagnosticParse for Element {
 
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        if let Some(name) = &self.name {
-            name.to_tokens(tokens);
+        match &self.name {
+            ElementName::Component(ident) => ident.to_tokens(tokens),
+            ElementName::Html(name) => name.to_tokens(tokens),
+            ElementName::None => {}
         }
         for attr in &self.attrs {
             attr.to_tokens(tokens);
@@ -528,6 +520,46 @@ impl ToTokens for AttributeType {
                     toggler.to_tokens(tokens);
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ElementName {
+    Component(Ident),
+    Html(HtmlName),
+    None
+}
+
+impl DiagnosticParse for ElementName {
+    fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>) -> syn::Result<Self> {
+        if input.peek(Ident::peek_any) {
+            let ident = input.fork().call(Ident::parse_any)?;
+            if let Some(true) = ident.to_string().chars().next().map(char::is_uppercase) {
+                let _ = input.call(Ident::parse_any);
+                Ok(Self::Component(ident))
+            } else {
+                Ok(Self::Html(input.diagnostic_parse(diagnostics)?))
+            }
+        } else {
+            Ok(Self::None)
+        }
+    }
+}
+
+impl Parse for ElementName {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        
+        Self::diagnostic_parse(input, &mut Vec::new())
+    }
+}
+
+impl ToTokens for ElementName {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match &self {
+            Self::Component(ident) => ident.to_tokens(tokens),
+            Self::Html(name) => name.to_tokens(tokens),
+            Self::None => {}
         }
     }
 }

@@ -12,7 +12,7 @@
 extern crate alloc;
 
 use alloc::{borrow::Cow, boxed::Box, string::String};
-use core::fmt::{self, Arguments, Display, Write};
+use core::{fmt::{self, Arguments, Display, Write}};
 
 pub use maud_macros::html;
 
@@ -282,6 +282,15 @@ impl<T: Default> Default for PreEscaped<T> {
 /// };
 /// ```
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
+
+#[derive(Clone, Copy)]
+pub struct ComponentBody<'a>(&'a dyn Fn(&mut String));
+
+impl Render for ComponentBody<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        (self.0)(buffer)
+    }
+}
 
 #[cfg(feature = "rocket")]
 mod rocket_support {

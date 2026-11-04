@@ -7,19 +7,20 @@ extern crate proc_macro;
 mod ast;
 mod escape;
 mod generate;
-
 use ast::DiagnosticParse;
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro2_diagnostics::Diagnostic;
 use quote::quote;
-use syn::parse::{ParseStream, Parser};
+use syn::{Expr, parse::{ParseStream, Parser}, token::FatArrow};
+
+use crate::ast::{Element, Markups};
 
 #[proc_macro]
 pub fn html(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    expand(input.into()).into()
+    expand_html(input.into()).into()
 }
 
-fn expand(input: TokenStream) -> TokenStream {
+pub(crate) fn expand_html(input: TokenStream) -> TokenStream {
     // Heuristic: the size of the resulting markup tends to correlate with the
     // code size of the template itself
     let size_hint = input.to_string().len();
@@ -41,10 +42,10 @@ fn expand(input: TokenStream) -> TokenStream {
         }
     };
 
-    let diag_tokens = diagnostics.into_iter().map(Diagnostic::emit_as_expr_tokens);
-
     let output_ident = Ident::new("__maud_output", Span::mixed_site());
+    let diag_tokens = diagnostics.into_iter().map(Diagnostic::emit_as_expr_tokens);
     let stmts = generate::generate(markups, output_ident.clone());
+    
     quote! {{
         extern crate alloc;
         extern crate maud;
@@ -52,5 +53,56 @@ fn expand(input: TokenStream) -> TokenStream {
         #stmts
         #(#diag_tokens)*
         maud::PreEscaped(#output_ident)
+    }}
+}
+
+
+#[proc_macro]
+pub fn write_html(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    expand_write_html(input.into()).into()
+}
+
+struct WriteHtmlContent(Expr, Markups<Element>);
+
+impl DiagnosticParse for WriteHtmlContent {
+    fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>)-> syn::Result<Self> {
+        let expr = input.parse::<Expr>()?;
+        input.parse::<FatArrow>()?;
+        let markups = ast::Markups::diagnostic_parse(input, diagnostics)?;
+        Ok(WriteHtmlContent(expr, markups))
+    }
+}
+
+pub(crate) fn expand_write_html(input: TokenStream) -> TokenStream {
+    let mut diagnostics = Vec::new();
+    
+    let WriteHtmlContent(target, markups) = match Parser::parse2(
+        |input: ParseStream| WriteHtmlContent::diagnostic_parse(input, &mut diagnostics),
+        input,
+    ) {
+        Ok(data) => data,
+        Err(err) => {
+            let err = err.to_compile_error();
+            let diag_tokens = diagnostics.into_iter().map(Diagnostic::emit_as_expr_tokens);
+
+            return quote! {{
+                #err
+                #(#diag_tokens)*
+            }};
+        }
+    };
+
+    let output_ident = Ident::new("__maud_output", Span::mixed_site());
+    let diag_tokens = diagnostics.into_iter().map(Diagnostic::emit_as_expr_tokens);
+    let stmts = generate::generate(markups, output_ident.clone());
+
+    quote! {{
+        extern crate alloc;
+        extern crate maud;
+
+        let mut #output_ident: &mut alloc::string::String = {#target};
+        #stmts
+        #(#diag_tokens)*
+        ;
     }}
 }

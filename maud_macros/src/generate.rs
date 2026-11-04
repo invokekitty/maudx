@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{ToTokens, quote};
-use syn::{Expr, Local, parse_quote, token::Brace};
+use quote::{ToTokens, quote, quote_spanned};
+use syn::{Expr, Local, parse_quote, spanned::Spanned, token::Brace};
 
 use crate::{ast::*, escape};
 
@@ -70,7 +70,15 @@ impl Generator {
     }
 
     fn element(&self, element: Element, build: &mut Builder) {
-        let element_name = element.name.clone().unwrap_or_else(|| parse_quote!(div));
+        let element_name = match element.name.clone() {
+            ElementName::Component(name) => {
+                self.component(element, name, build);
+                return;
+            }
+            ElementName::Html(html_name) => html_name,
+            ElementName::None => parse_quote!(div)
+        };
+
         build.push_str("<");
         self.name(element_name.clone(), build);
         self.attrs(element.attrs, build);
@@ -81,6 +89,43 @@ impl Generator {
             self.name(element_name, build);
             build.push_str(">");
         }
+    }
+
+    fn component(&self, component: Element, name: Ident, build: &mut Builder) {
+        let (_, _, attrs) = split_attrs(component.attrs);
+
+        let mut propertieses = self.builder();
+
+        for (name, attr_type) in attrs {
+            let prop = Ident::new(
+                &name.name.iter()
+                    .enumerate()
+                    .fold(String::new(), |mut builder, (index, part)| {
+                        if index != 0 { builder.push('_'); }
+                        builder.push_str(&part.to_string());
+                        builder
+                     }),
+                name.span()
+            );
+
+            let value = match attr_type {
+                AttributeType::Empty(None) => quote_spanned! {name.span()=> true },
+                AttributeType::Empty(Some(toggler))
+                | AttributeType::Optional { toggler,.. } => quote_spanned! {name.span()=>#toggler },
+                AttributeType::Normal { value,.. } => quote_spanned! {name.span()=>#value },
+            };
+
+            propertieses.push_tokens(quote! { #prop: #value.into(), });
+        }
+
+        if let ElementBody::Block(block) = component.body {
+            propertieses.push_tokens(quote! {
+                body: { maud::html!(#block) }.into()
+            });
+        }
+
+        let propertieses = propertieses.finish();
+        self.splice(parse_quote!(#name { #propertieses }), build);
     }
 
     fn name(&self, name: HtmlName, build: &mut Builder) {
