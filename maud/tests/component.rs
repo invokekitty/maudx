@@ -1,0 +1,32 @@
+use maud::{PreEscaped, Render, html};
+use maud_macros::write_html;
+
+
+struct Project<'a> {
+    id: &'a str,
+    title: &'a str,
+    desc: &'a str,
+    deprecated: bool
+}
+
+impl Render for Project<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        write_html! { buffer => 
+            #(self.id) .project .deprecated[self.deprecated] {
+                h1 { (self.title) }
+                p { (self.desc) }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_components() {
+    let PreEscaped(html) = html! {
+        h2 { "Projects" }
+        Project id="meow" title="meow" deprecated=(false) desc="Eedges";
+        Project id="eegs" title="uwu" deprecated=(true) desc="Eedges";
+    };
+
+    println!("{html}")
+}
