@@ -15,6 +15,7 @@ use alloc::{borrow::Cow, boxed::Box, string::String};
 use core::{fmt::{self, Arguments, Display, Write}};
 
 pub use maud_macros::html;
+pub use maud_macros::write_html;
 
 mod escape;
 
