@@ -132,7 +132,9 @@ impl Generator {
         if let ElementBody::Block(block) = component.body {
             let buffer = Ident::new("__maud_buffer", Span::mixed_site());
             propertieses.push_tokens(quote! {
-                body: maud::ComponentBody::new(&|#buffer: &mut String| maud::write_html!(#buffer => #block)).into(),
+                body: maud::macro_private::new_component_body(
+                    &|#buffer: &mut String| maud::write_html!(#buffer => #block)
+                ).into(),
             });
         }
 

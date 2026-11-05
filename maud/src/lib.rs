@@ -286,12 +286,6 @@ pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
 pub struct ComponentBody<'a>(&'a dyn Fn(&mut String));
 
-impl<'a> ComponentBody<'a> {
-    pub fn new(f: &'a dyn Fn(&mut String)) -> Self {
-        ComponentBody(f)
-    }
-}
-
 impl Render for ComponentBody<'_> {
     fn render_to(&self, buffer: &mut String) {
         (self.0)(buffer)
@@ -455,7 +449,7 @@ mod salvo_support {
 
 #[doc(hidden)]
 pub mod macro_private {
-    use crate::{Render, display};
+    use crate::{ComponentBody, Render, display};
     use alloc::string::String;
     use core::fmt::Display;
 
@@ -501,5 +495,9 @@ pub mod macro_private {
         pub fn render_to<T: Display + ?Sized>(self, value: &T, buffer: &mut String) {
             display(value).render_to(buffer);
         }
+    }
+
+    pub fn new_component_body<'a>(f: &'a dyn Fn(&mut String)) -> ComponentBody<'a> {
+        ComponentBody(f)
     }
 }
