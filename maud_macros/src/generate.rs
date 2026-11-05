@@ -131,8 +131,12 @@ impl Generator {
 
         if let ElementBody::Block(block) = component.body {
             propertieses.push_tokens(quote! {
-                body: { maud::html!(#block) }.into()
+                body: maud::html!(#block).into(),
             });
+        }
+
+        #[cfg(feature = "default-fields")] {
+            propertieses.push_tokens(quote! { .. });
         }
 
         Some(propertieses.finish())

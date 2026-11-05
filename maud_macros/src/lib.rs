@@ -7,11 +7,13 @@ extern crate proc_macro;
 mod ast;
 mod escape;
 mod generate;
+use std::collections::HashMap;
+
 use ast::DiagnosticParse;
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro2_diagnostics::Diagnostic;
 use quote::quote;
-use syn::{Expr, parse::{ParseStream, Parser}, token::FatArrow};
+use syn::{Expr, Item::{self, Struct}, parse::{ParseStream, Parser}, token::FatArrow};
 
 use crate::ast::{Element, Markups};
 
@@ -75,7 +77,7 @@ impl DiagnosticParse for WriteHtmlContent {
 
 pub(crate) fn expand_write_html(input: TokenStream) -> TokenStream {
     let mut diagnostics = Vec::new();
-    
+
     let WriteHtmlContent(target, markups) = match Parser::parse2(
         |input: ParseStream| WriteHtmlContent::diagnostic_parse(input, &mut diagnostics),
         input,
@@ -106,3 +108,12 @@ pub(crate) fn expand_write_html(input: TokenStream) -> TokenStream {
         ;
     }}
 }
+
+// #[proc_macro_attribute]
+// pub fn component(_: proc_macro::TokenStream, structure: proc_macro::TokenStream) -> proc_macro::TokenStream {
+//     expand_component(structure.into()).into()
+// }
+
+// pub(crate) fn expand_component(input: TokenStream) -> TokenStream {
+//     let structure = (|input: ParseStream| Item)
+// }

@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::ToTokens;
 use syn::{
-    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Stmt, braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
+    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Path, Stmt, braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
         At, Brace, Bracket, Colon, Comma, Dot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus,
         Paren, Pound, Question, Semi, Slash, While,
     },
@@ -537,8 +537,6 @@ impl DiagnosticParse for ElementName {
             let ident = input.fork().call(Ident::parse_any)?;
             let str = ident.to_string();
             if let Some(true) = str.chars().next().map(char::is_uppercase) {
-                Ok(Self::Component(input.call(Ident::parse_any)?))
-            } else if str.contains("::") {
                 Ok(Self::Component(input.call(Ident::parse_any)?))
             } else {
                 Ok(Self::Html(input.diagnostic_parse(diagnostics)?))

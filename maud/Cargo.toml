@@ -24,6 +24,7 @@ salvo = ["salvo_core", "http"]
 
 # Optional extras.
 json = ["serde", "serde_json"]
+default-fields = ["maud_macros/default-fields"]
 
 [dependencies]
 maud_macros = { version = "0.27.0", path = "../maud_macros" }
