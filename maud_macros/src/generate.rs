@@ -101,10 +101,10 @@ impl Generator {
 
     fn component_attrs(&self, component: Element) -> Option<TokenStream> {
         let (_, _, attrs) = split_attrs(component.attrs);
-        if attrs.is_empty() && let ElementBody::Void(_) = component.body { 
-            return None; 
+        if attrs.is_empty() && let ElementBody::Void(_) = component.body {
+            return None;
         }
-        
+
         let mut propertieses = self.builder();
 
         for (name, attr_type) in attrs {
@@ -130,8 +130,9 @@ impl Generator {
         }
 
         if let ElementBody::Block(block) = component.body {
+            let buffer = Ident::new("__maud_buffer", Span::mixed_site());
             propertieses.push_tokens(quote! {
-                body: maud::html!(#block).into(),
+                body: maud::ComponentBody::new(&|#buffer: &mut String| maud::write_html!(#buffer => #block)).into(),
             });
         }
 

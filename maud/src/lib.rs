@@ -284,12 +284,23 @@ impl<T: Default> Default for PreEscaped<T> {
 /// ```
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
-#[derive(Clone, Copy)]
 pub struct ComponentBody<'a>(&'a dyn Fn(&mut String));
+
+impl<'a> ComponentBody<'a> {
+    pub fn new(f: &'a dyn Fn(&mut String)) -> Self {
+        ComponentBody(f)
+    }
+}
 
 impl Render for ComponentBody<'_> {
     fn render_to(&self, buffer: &mut String) {
         (self.0)(buffer)
+    }
+}
+
+impl Into<Markup> for ComponentBody<'_> {
+    fn into(self) -> Markup {
+        self.render()
     }
 }
 
