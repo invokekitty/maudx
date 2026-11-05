@@ -26,7 +26,7 @@ impl Render for Project<'_> {
 fn test_components() {
     let PreEscaped(html) = html! {
         h2 { "Projects" }
-        Project id="meow" title="meow" deprecated=(false) desc="Eedges" {
+        Project #meow title="meow" deprecated=(false) desc="Eedges" {
             h1 { "eegs" }
         }
         Project id="eegs" title="uwu" deprecated=(true) desc="Eedges" {

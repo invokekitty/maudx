@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, quote, quote_spanned};
-use syn::{Expr, Local, parse_quote, spanned::Spanned, token::Brace};
+use syn::{Expr, LitStr, Local, parse_quote, spanned::Spanned, token::Brace};
 
 use crate::{ast::*, escape};
 
@@ -100,8 +100,8 @@ impl Generator {
     }
 
     fn component_attrs(&self, component: Element) -> Option<TokenStream> {
-        let (_, _, attrs) = split_attrs(component.attrs);
-        if attrs.is_empty() && let ElementBody::Void(_) = component.body {
+        let (_, id_attr, attrs) = split_attrs(component.attrs);
+        if attrs.is_empty() && let ElementBody::Void(_) = component.body && let None = id_attr {
             return None;
         }
 
@@ -127,6 +127,26 @@ impl Generator {
             };
 
             propertieses.push_tokens(quote! { #prop: #value.into(), });
+        }
+
+        if let Some(id) = id_attr {
+            let ts = match id {
+                HtmlNameOrMarkup::HtmlName(name) => {
+                    let str = LitStr::new(&name.to_string(), name.span());
+                    quote! { id: #str.into(), }
+                },
+                HtmlNameOrMarkup::Markup(Markup::Lit(HtmlLit { lit })) => 
+                    quote! { id: #lit.into(), },
+                HtmlNameOrMarkup::Markup(Markup::Splice { expr,.. }) => {
+                    let mut builder = self.builder();
+                    self.splice(expr, &mut builder);
+                    let splice = builder.finish();
+                    quote! { id: #splice.into(), }
+                },
+                _ => unreachable!()
+            };
+
+            propertieses.push_tokens(ts);
         }
 
         if let ElementBody::Block(block) = component.body {
