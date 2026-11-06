@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, quote, quote_spanned};
-use syn::{Expr, LitStr, Local, parse_quote, spanned::Spanned, token::Brace};
+use syn::{parse_quote, spanned::Spanned, token::Brace, Expr, LitStr, Local, Path};
 
 use crate::{ast::*, escape};
 
@@ -91,7 +91,7 @@ impl Generator {
         }
     }
 
-    fn component(&self, component: Element, name: Ident, build: &mut Builder) {
+    fn component(&self, component: Element, name: Path, build: &mut Builder) {
         if let Some(fields) = self.component_attrs(component) {
             self.splice(parse_quote!(#name { #fields }), build);
         } else {
