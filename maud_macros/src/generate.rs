@@ -92,14 +92,17 @@ impl Generator {
     }
 
     fn component(&self, component: Element, name: Ident, build: &mut Builder) {
-        if let Some(fields) = self.component_attrs(component) {
-            self.splice(parse_quote!(#name { #fields }), build);
+        let constructor: Expr = if let Some(fields) = self.component_properties(component) {
+            parse_quote!(#name { #fields })
         } else {
-            self.splice(parse_quote!(#name), build);
-        }
+            parse_quote!(#name)
+        };
+
+        let output_ident = &self.output_ident;
+        build.push_tokens(quote! { <#name as maud::Render>::render_to(&(#constructor), &mut #output_ident); });
     }
 
-    fn component_attrs(&self, component: Element) -> Option<TokenStream> {
+    fn component_properties(&self, component: Element) -> Option<TokenStream> {
         let (_, id_attr, attrs) = split_attrs(component.attrs);
         if attrs.is_empty() && let ElementBody::Void(_) = component.body && let None = id_attr {
             return None;
@@ -135,7 +138,7 @@ impl Generator {
                     let str = LitStr::new(&name.to_string(), name.span());
                     quote! { id: #str.into(), }
                 },
-                HtmlNameOrMarkup::Markup(Markup::Lit(HtmlLit { lit })) => 
+                HtmlNameOrMarkup::Markup(Markup::Lit(HtmlLit { lit })) =>
                     quote! { id: #lit.into(), },
                 HtmlNameOrMarkup::Markup(Markup::Splice { expr,.. }) => {
                     let mut builder = self.builder();
@@ -150,12 +153,25 @@ impl Generator {
         }
 
         if let ElementBody::Block(block) = component.body {
-            let buffer = Ident::new("__maud_buffer", Span::mixed_site());
-            propertieses.push_tokens(quote! {
-                body: maud::macro_private::new_component_body(
-                    &|#buffer: &mut String| maud::write_html!(#buffer => #block)
-                ).into(),
-            });
+            let mut build = self.builder();
+            self.block(block.clone(), &mut build);
+
+            if build.tokens.is_empty() {
+                // TokenStream is empty, meaning cut() was never called, so body must be a static string
+                // so lets avoid dynamic dispatch
+                let bodystr = LitStr::new(&build.tail, block.span());
+                propertieses.push_tokens(quote! {
+                    body: maud::ComponentBody::Static(#bodystr),
+                });
+            } else {
+                // TokenStream not empty, body is dynamic
+                let tokens = build.finish();
+                let output_ident = &self.output_ident;
+
+                propertieses.push_tokens(quote! {
+                    body: maud::ComponentBody::Dynamic(&|mut #output_ident: &mut String| { #tokens }),
+                });
+            }
         }
 
         #[cfg(feature = "default-fields")] {
@@ -449,7 +465,7 @@ impl Builder {
             return;
         }
         let push_str_expr = {
-            let output_ident = self.output_ident.clone();
+            let output_ident = &self.output_ident;
             let tail = &self.tail;
             quote!(#output_ident.push_str(#tail);)
         };

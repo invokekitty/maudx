@@ -282,13 +282,21 @@ impl<T: Default> Default for PreEscaped<T> {
 ///     }
 /// };
 /// ```
+/// 
+
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
-pub struct ComponentBody<'a>(&'a dyn Fn(&mut String));
+pub enum ComponentBody<'a> {
+    Static(&'static str),
+    Dynamic(&'a dyn Fn(&mut String))
+}
 
 impl Render for ComponentBody<'_> {
     fn render_to(&self, buffer: &mut String) {
-        (self.0)(buffer)
+        match self {
+            ComponentBody::Static(str) => buffer.push_str(str),
+            ComponentBody::Dynamic(body) => body(buffer)
+        }
     }
 }
 
@@ -495,9 +503,5 @@ pub mod macro_private {
         pub fn render_to<T: Display + ?Sized>(self, value: &T, buffer: &mut String) {
             display(value).render_to(buffer);
         }
-    }
-
-    pub fn new_component_body<'a>(f: &'a dyn Fn(&mut String)) -> ComponentBody<'a> {
-        ComponentBody(f)
     }
 }
