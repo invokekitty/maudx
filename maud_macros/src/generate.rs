@@ -161,7 +161,7 @@ impl Generator {
                 // so lets avoid dynamic dispatch
                 let bodystr = LitStr::new(&build.tail, block.span());
                 propertieses.push_tokens(quote! {
-                    body: maud::ComponentBody::Static(#bodystr),
+                    body: maud::ComponentBody::Static(#bodystr).into(),
                 });
             } else {
                 // TokenStream not empty, body is dynamic
@@ -169,7 +169,7 @@ impl Generator {
                 let output_ident = &self.output_ident;
 
                 propertieses.push_tokens(quote! {
-                    body: maud::ComponentBody::Dynamic(&|mut #output_ident: &mut String| { #tokens }),
+                    body: maud::ComponentBody::Dynamic(&|mut #output_ident: &mut String| { #tokens }).into(),
                 });
             }
         }
