@@ -154,13 +154,15 @@ impl Generator {
 
         if let ElementBody::Block(block) = component.body {
             let mut build = self.builder();
-            self.block(block.clone(), &mut build);
+            let span = block.span();
+            
+            self.markups(block.markups, &mut build);
 
             if build.tokens.is_empty() {
                 // TokenStream is empty, meaning cut() was never called, so body must be a static string
                 // so lets avoid dynamic dispatch
-                let bodystr = LitStr::new(&build.tail, block.span());
-                propertieses.push_tokens(quote! {
+                let bodystr = LitStr::new(&build.tail, span);
+                propertieses.push_tokens(quote_spanned! {span=>
                     body: maud::ComponentBody::Static(#bodystr).into(),
                 });
             } else {
@@ -168,7 +170,7 @@ impl Generator {
                 let tokens = build.finish();
                 let output_ident = &self.output_ident;
 
-                propertieses.push_tokens(quote! {
+                propertieses.push_tokens(quote_spanned! {span=>
                     body: maud::ComponentBody::Dynamic(&|mut #output_ident: &mut String| { #tokens }).into(),
                 });
             }
