@@ -3,12 +3,11 @@ use std::fmt::{self, Display, Formatter};
 use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use quote::ToTokens;
-use syn::{
-    Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Path, Stmt, braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
-        At, Brace, Bracket, Colon, Comma, Dot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus,
-        Paren, Pound, Question, Semi, Slash, While,
-    },
-};
+use syn::{braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
+    At, Brace, Bracket, Colon, Comma, Dot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus,
+    Paren, Pound, Question, Semi, Slash, While,
+}, Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Path, Stmt, Token};
+use syn::parse::discouraged::Speculative;
 
 #[derive(Debug, Clone)]
 pub struct Markups<E> {
@@ -526,30 +525,32 @@ impl ToTokens for AttributeType {
 
 #[derive(Debug, Clone)]
 pub enum ElementName {
-    Component(Ident),
+    Component(Path),
     Html(HtmlName),
     None
 }
 
 impl DiagnosticParse for ElementName {
     fn diagnostic_parse(input: ParseStream, diagnostics: &mut Vec<Diagnostic>) -> syn::Result<Self> {
-        if input.peek(Ident::peek_any) {
-            let ident = input.fork().call(Ident::parse_any)?;
-            let str = ident.to_string();
-            if let Some(true) = str.chars().next().map(char::is_uppercase) {
-                Ok(Self::Component(input.call(Ident::parse_any)?))
-            } else {
-                Ok(Self::Html(input.diagnostic_parse(diagnostics)?))
-            }
-        } else {
-            Ok(Self::None)
+        let lookahead = input.lookahead1();
+        if !(lookahead.peek(Token![::]) || lookahead.peek(Ident::peek_any)) {
+            return Ok(Self::None);
         }
+
+        let fork = input.fork();
+        if let Ok(html) = HtmlName::parse_element_name(&fork, diagnostics, false) {
+            input.advance_to(&fork);
+            return Ok(Self::Html(html))
+        }
+
+        let path = input.parse::<Path>()?;
+        Ok(Self::Component(path))
     }
 }
 
 impl Parse for ElementName {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        
+
         Self::diagnostic_parse(input, &mut Vec::new())
     }
 }
@@ -569,17 +570,22 @@ pub struct HtmlName {
     pub name: Punctuated<HtmlNameFragment, HtmlNamePunct>,
 }
 
-impl DiagnosticParse for HtmlName {
-    fn diagnostic_parse(
-        input: ParseStream,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) -> syn::Result<Self> {
+impl HtmlName {
+    fn parse_element_name(input: ParseStream, diagnostics: &mut Vec<Diagnostic>, allow_uppercase_ident: bool) -> syn::Result<Self> {
         Ok(Self {
             name: {
                 let mut punctuated = Punctuated::new();
 
                 loop {
-                    punctuated.push_value(input.diagnostic_parse(diagnostics)?);
+                    let part = input.diagnostic_parse::<HtmlNameFragment>(diagnostics)
+                        .and_then(|frag|
+                            if !allow_uppercase_ident
+                                && let HtmlNameFragment::Ident(ref ident) = frag
+                                && ident.to_string().contains(|chr: char| chr.is_uppercase())
+                            { Err(input.error("meow")) }
+                            else { Ok(frag) }
+                        )?;
+                    punctuated.push_value(part);
 
                     if !(input.peek(Minus) || input.peek(Colon)) {
                         break;
@@ -592,6 +598,15 @@ impl DiagnosticParse for HtmlName {
                 punctuated
             },
         })
+    }
+}
+
+impl DiagnosticParse for HtmlName {
+    fn diagnostic_parse(
+        input: ParseStream,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> syn::Result<Self> {
+        Self::parse_element_name(input, diagnostics, true)
     }
 }
 
@@ -641,7 +656,8 @@ impl DiagnosticParse for HtmlNameFragment {
         let lookahead = input.lookahead1();
 
         if lookahead.peek(Ident::peek_any) {
-            input.call(Ident::parse_any).map(Self::Ident)
+            input.call(Ident::parse_any)
+                .map(Self::Ident)
         } else if lookahead.peek(LitInt) {
             input.parse().map(Self::LitInt)
         } else if lookahead.peek(LitStr) {

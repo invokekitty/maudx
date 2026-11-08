@@ -29,7 +29,7 @@ fn test_components() {
         Project #meow title="meow" deprecated=(false) desc="Eedges" {
             h1 { "eegs" }
         }
-        Project id="eegs" title="uwu" deprecated=(true) desc="Eedges" {
+        self::Project id="eegs" title="uwu" deprecated=(true) desc="Eedges" {
             h2 { "eedges" }
             Project id="skeegs" title="meow" deprecated desc="arf" {
                 "meow"
