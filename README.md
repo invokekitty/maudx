@@ -1,3 +1,5 @@
+# This fork is for my personal use and i provide no guarantees of support or api compatibility
+
 # <img align="right" src="https://raw.githubusercontent.com/lambda-fairy/maud/v0.27.0/maud.png" alt="HTML5 rocks." title="HTML5 rocks."> maud
 [![CI](https://github.com/lambda-fairy/maud/workflows/CI/badge.svg)](https://github.com/lambda-fairy/maud/actions) 
 [![Cargo](https://img.shields.io/crates/v/maud.svg)](https://crates.io/crates/maud) 

@@ -15,7 +15,7 @@ edition.workspace = true
 include.workspace = true
 
 [features]
-default = ["components"]
+default = []
 
 # Web framework integrations
 actix-web = ["actix-web-dep", "futures-util"]
@@ -25,7 +25,7 @@ salvo = ["salvo_core", "http"]
 # Optional extras.
 json = ["serde", "serde_json"]
 components = ["maud_macros/components"]
-component-default-fields = ["components", "maud_macros/default-fields"]
+default-fields = ["components", "maud_macros/default-fields"]
 
 [dependencies]
 maud_macros = { version = "0.27.0", path = "../maud_macros" }

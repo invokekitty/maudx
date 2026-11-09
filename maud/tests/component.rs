@@ -1,7 +1,9 @@
-use maud::{PreEscaped, Render, components::{Body, Component, MaybeBody}, html};
+#![cfg(feature = "components")]
+use maud::{PreEscaped, Render, components::{Body, Component, MaybeBody}, html, attrs};
 use maud_macros::write_html;
 
 
+#[derive(Default)]
 struct Project<'a> {
     id: &'a str,
     title: &'a str,
@@ -26,9 +28,11 @@ impl<'a> Component for Project<'a> {
 
 #[test]
 fn test_components() {
+    let eegs = attrs!(eegs = "meow" eedges = "skeeg");
+    
     let PreEscaped(html) = html! {
-        h2 { "Projects" }
-        Project #meow title="meow" deprecated=(false) desc="Eedges" {
+        h2 ..(eegs) { "Projects" }
+        Project #meow title="meow" .. {
             h1 { "eegs" }
         }
         self::Project id="eegs" title="uwu" deprecated=(true) desc="Eedges" {

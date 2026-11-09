@@ -285,9 +285,16 @@ impl<T: Default> Default for PreEscaped<T> {
 ///     }
 /// };
 /// ```
-/// 
+///
 
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
+
+#[macro_export]
+macro_rules! attrs {
+    ($($attr:ident=$value:literal)+) => {
+        [$((stringify!($attr), $value)),+]
+    };
+}
 
 #[cfg(feature = "rocket")]
 mod rocket_support {
@@ -486,5 +493,13 @@ pub mod macro_private {
         pub fn render_to<T: Display + ?Sized>(self, value: &T, buffer: &mut String) {
             display(value).render_to(buffer);
         }
+    }
+
+    pub fn expand_attr((key, value): &(impl AsRef<str>, impl AsRef<str>), buffer: &mut String) {
+        buffer.push(' ');
+        buffer.push_str(key.as_ref());
+        buffer.push_str("=\"");
+        buffer.push_str(value.as_ref());
+        buffer.push('"');
     }
 }

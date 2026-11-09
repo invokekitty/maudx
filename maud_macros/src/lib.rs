@@ -7,13 +7,12 @@ extern crate proc_macro;
 mod ast;
 mod escape;
 mod generate;
-use std::collections::HashMap;
 
 use ast::DiagnosticParse;
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro2_diagnostics::Diagnostic;
 use quote::quote;
-use syn::{Expr, Item::{self, Struct}, parse::{ParseStream, Parser}, token::FatArrow};
+use syn::{Expr, parse::{ParseStream, Parser}, token::FatArrow};
 
 use crate::ast::{Element, Markups};
 

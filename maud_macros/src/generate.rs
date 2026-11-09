@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, quote, quote_spanned};
-use syn::{parse_quote, spanned::Spanned, token::Brace, Expr, LitStr, Local, Path};
+use syn::{Expr, LitStr, Local, Path, parse_quote, spanned::Spanned, token::{Brace, DotDot}};
 
 use crate::{ast::*, escape};
 
@@ -71,12 +71,13 @@ impl Generator {
 
     fn element(&self, element: Element, build: &mut Builder) {
         let element_name = match element.name.clone() {
+            ElementName::Html(html_name) => html_name,
+            ElementName::None => parse_quote!(div),
+            #[cfg(feature = "components")]
             ElementName::Component(name) => {
                 self.component(element, name, build);
                 return;
             }
-            ElementName::Html(html_name) => html_name,
-            ElementName::None => parse_quote!(div)
         };
 
         build.push_str("<");
@@ -91,6 +92,7 @@ impl Generator {
         }
     }
 
+    #[cfg(feature = "components")]
     fn component(&self, component: Element, name: Path, build: &mut Builder) {
         let constructor: Expr = if let Some(fields) = self.component_properties(component.attrs) {
             parse_quote!(#name { #fields })
@@ -108,6 +110,7 @@ impl Generator {
         });
     }
 
+    #[cfg(feature = "components")]
     fn component_body(&self, body: ElementBody, parent_build: &mut Builder) {
         match body {
             ElementBody::Void(semi) =>
@@ -138,8 +141,9 @@ impl Generator {
         }
     }
 
+    #[cfg(feature = "components")]
     fn component_properties(&self, attrs: Vec<Attribute>) -> Option<TokenStream> {
-        let (_, id_attr, attrs) = split_attrs(attrs);
+        let (_, id_attr, attrs, default) = split_attrs(attrs);
         if attrs.is_empty() && let None = id_attr {
             return None;
         }
@@ -188,8 +192,17 @@ impl Generator {
             propertieses.push_tokens(ts);
         }
 
-        #[cfg(feature = "default-fields")] {
-            propertieses.push_tokens(quote! { .. });
+        match default {
+            DefaultExpr::Empty(dot_dot) => {
+                #[cfg(feature = "default-fields")]
+                    propertieses.push_tokens(quote_spanned! {dot_dot.span()=> .. });
+                #[cfg(not(feature = "default-fields"))]
+                    propertieses.push_tokens(quote_spanned! {dot_dot.span()=> ..Default::default() });
+            },
+            DefaultExpr::Base(expr) => {
+                propertieses.push_tokens(quote! { ..(#expr) });
+            },
+            DefaultExpr::None => {}
         }
 
         Some(propertieses.finish())
@@ -249,7 +262,7 @@ impl Generator {
     }
 
     fn attrs(&self, attrs: Vec<Attribute>, build: &mut Builder) {
-        let (classes, id, named_attrs) = split_attrs(attrs);
+        let (classes, id, named_attrs, default) = split_attrs(attrs);
 
         if !classes.is_empty() {
             let mut toggle_class_exprs = vec![];
@@ -293,6 +306,15 @@ impl Generator {
 
         for (name, attr_type) in named_attrs {
             self.attr(name, attr_type, build);
+        }
+
+        if let DefaultExpr::Base(expr) = default {
+            let output_ident = &self.output_ident;
+            build.push_tokens(quote! {
+                for kv in (#expr) {
+                    maud::macro_private::expand_attr(&kv, &mut #output_ident);
+                }
+            });
         }
     }
 
@@ -419,6 +441,13 @@ impl Generator {
 
 ////////////////////////////////////////////////////////
 
+
+enum DefaultExpr {
+    None,
+    Empty(DotDot),
+    Base(Expr)
+}
+
 #[allow(clippy::type_complexity)]
 fn split_attrs(
     attrs: Vec<Attribute>,
@@ -426,10 +455,12 @@ fn split_attrs(
     Vec<(HtmlNameOrMarkup, Option<Expr>)>,
     Option<HtmlNameOrMarkup>,
     Vec<(HtmlName, AttributeType)>,
+    DefaultExpr
 ) {
     let mut classes = vec![];
     let mut id = None;
     let mut named_attrs = vec![];
+    let mut def_expr = DefaultExpr::None;
 
     for attr in attrs {
         match attr {
@@ -438,10 +469,16 @@ fn split_attrs(
             }
             Attribute::Id { name, .. } => id = Some(name),
             Attribute::Named { name, attr_type } => named_attrs.push((name, attr_type)),
+            Attribute::Defaults { base_expr, dot_dot } =>
+                if let Some(e) = base_expr {
+                    def_expr = DefaultExpr::Base(e);
+                } else {
+                    def_expr = DefaultExpr::Empty(dot_dot);
+                }
         }
     }
 
-    (classes, id, named_attrs)
+    (classes, id, named_attrs, def_expr)
 }
 
 ////////////////////////////////////////////////////////

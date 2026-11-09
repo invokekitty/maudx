@@ -2,11 +2,10 @@ use std::fmt::{self, Display, Formatter};
 
 use proc_macro2::TokenStream;
 use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
-use quote::ToTokens;
-use syn::{braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
-    At, Brace, Bracket, Colon, Comma, Dot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus,
-    Paren, Pound, Question, Semi, Slash, While,
-}, Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Path, Stmt, Token};
+use quote::{ToTokens, quote};
+use syn::{Error, Expr, Ident, Lit, LitBool, LitInt, LitStr, Local, Pat, Path, Stmt, Token, braced, bracketed, ext::IdentExt, parenthesized, parse::{Lookahead1, Parse, ParseBuffer, ParseStream}, punctuated::{Pair, Punctuated}, spanned::Spanned, token::{
+    At, Brace, Bracket, Colon, Comma, Dot, DotDot, Else, Eq, FatArrow, For, If, In, Let, Match, Minus, Paren, Pound, Question, Semi, Slash, While,
+}};
 use syn::parse::discouraged::Speculative;
 
 #[derive(Debug, Clone)]
@@ -240,6 +239,7 @@ impl DiagnosticParse for Element {
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match &self.name {
+            #[cfg(feature = "components")]
             ElementName::Component(ident) => ident.to_tokens(tokens),
             ElementName::Html(name) => name.to_tokens(tokens),
             ElementName::None => {}
@@ -336,6 +336,10 @@ pub enum Attribute {
         name: HtmlName,
         attr_type: AttributeType,
     },
+    Defaults {
+        dot_dot: DotDot,
+        base_expr: Option<Expr>
+    }
 }
 
 impl DiagnosticParse for Attribute {
@@ -345,7 +349,22 @@ impl DiagnosticParse for Attribute {
     ) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
 
-        if lookahead.peek(Dot) {
+        if lookahead.peek(Token![..]) {
+            Ok(Self::Defaults { 
+                dot_dot: input.parse()?, 
+                base_expr: {
+                    let lookahead = input.lookahead1();
+
+                    if lookahead.peek(Paren) {
+                        let content;
+                        parenthesized!(content in input);
+                        Some(content.parse()?)
+                    } else {
+                        None
+                    }
+                }
+            })
+        } else if lookahead.peek(Dot) {
             Ok(Self::Class {
                 dot_token: input.parse()?,
                 name: input.diagnostic_parse(diagnostics)?,
@@ -413,6 +432,12 @@ impl ToTokens for Attribute {
             Self::Named { name, attr_type } => {
                 name.to_tokens(tokens);
                 attr_type.to_tokens(tokens);
+            }
+            Self::Defaults { dot_dot, base_expr } => {
+                dot_dot.to_tokens(tokens);
+                if let Some(base_expr) = base_expr {
+                    tokens.extend(quote! {(#base_expr)});
+                }
             }
         }
     }
@@ -525,6 +550,7 @@ impl ToTokens for AttributeType {
 
 #[derive(Debug, Clone)]
 pub enum ElementName {
+    #[cfg(feature = "components")]
     Component(Path),
     Html(HtmlName),
     None
@@ -538,13 +564,17 @@ impl DiagnosticParse for ElementName {
         }
 
         let fork = input.fork();
-        if let Ok(html) = HtmlName::parse_element_name(&fork, diagnostics, false) {
+        if let Ok(html) = HtmlName::parse_element_name(&fork, diagnostics, cfg!(not(feature = "components"))) {
             input.advance_to(&fork);
             return Ok(Self::Html(html))
         }
 
-        let path = input.parse::<Path>()?;
-        Ok(Self::Component(path))
+        #[cfg(feature = "components")] {
+            let path = input.parse::<Path>()?;
+            Ok(Self::Component(path))
+        }
+        #[cfg(not(feature = "components"))]
+        Err(input.error("Not an html element"))
     }
 }
 
@@ -558,6 +588,7 @@ impl Parse for ElementName {
 impl ToTokens for ElementName {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match &self {
+            #[cfg(feature = "components")]
             Self::Component(ident) => ident.to_tokens(tokens),
             Self::Html(name) => name.to_tokens(tokens),
             Self::None => {}
