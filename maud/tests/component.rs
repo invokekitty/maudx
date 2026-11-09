@@ -1,4 +1,4 @@
-use maud::{ComponentBody, PreEscaped, Render, html};
+use maud::{PreEscaped, Render, components::{Body, Component, MaybeBody}, html};
 use maud_macros::write_html;
 
 
@@ -6,17 +6,19 @@ struct Project<'a> {
     id: &'a str,
     title: &'a str,
     desc: &'a str,
-    deprecated: bool,
-    body: ComponentBody<'a>
+    deprecated: bool
 }
 
-impl Render for Project<'_> {
-    fn render_to(&self, buffer: &mut String) {
+impl<'a> Component for Project<'a> {
+    type Body = MaybeBody<'a>;
+    fn render_to(self, body: MaybeBody<'a>, buffer: &mut String) {
         write_html! { buffer =>
             #(self.id) .project .deprecated[self.deprecated] {
                 h1 { (self.title) }
                 p { (self.desc) }
-                (self.body)
+                @if let Some(body) = body {
+                    span { (body) }
+                }
             }
         }
     }
@@ -31,9 +33,7 @@ fn test_components() {
         }
         self::Project id="eegs" title="uwu" deprecated=(true) desc="Eedges" {
             h2 { "eedges" }
-            Project id="skeegs" title="meow" deprecated desc="arf" {
-                "meow"
-            }
+            Project id="skeegs" title="meow" deprecated desc="arf";
         }
     };
 

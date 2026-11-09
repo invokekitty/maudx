@@ -92,19 +92,55 @@ impl Generator {
     }
 
     fn component(&self, component: Element, name: Path, build: &mut Builder) {
-        let constructor: Expr = if let Some(fields) = self.component_properties(component) {
+        let constructor: Expr = if let Some(fields) = self.component_properties(component.attrs) {
             parse_quote!(#name { #fields })
         } else {
             parse_quote!(#name)
         };
 
+        let mut build_body = self.builder();
+        self.component_body(component.body, &mut build_body);
+        let body = build_body.finish();
+
         let output_ident = &self.output_ident;
-        build.push_tokens(quote! { <#name as maud::Render>::render_to(&(#constructor), &mut #output_ident); });
+        build.push_tokens(quote! {
+            <#name as maud::components::Component>::render_to((#constructor), (#body).into(), &mut #output_ident);
+        });
     }
 
-    fn component_properties(&self, component: Element) -> Option<TokenStream> {
-        let (_, id_attr, attrs) = split_attrs(component.attrs);
-        if attrs.is_empty() && let ElementBody::Void(_) = component.body && let None = id_attr {
+    fn component_body(&self, body: ElementBody, parent_build: &mut Builder) {
+        match body {
+            ElementBody::Void(semi) =>
+                parent_build.push_tokens(quote_spanned! {semi.span=> maud::components::NoBody}),
+            ElementBody::Block(block) => {
+                let mut build = self.builder();
+                let span = block.span();
+
+                self.markups(block.markups, &mut build);
+
+                if build.tokens.is_empty() {
+                    // TokenStream is empty, meaning cut() was never called, so body must be a static string
+                    // so lets avoid dynamic dispatch
+                    let bodystr = LitStr::new(&build.tail, span);
+                    parent_build.push_tokens(quote_spanned! {span=>
+                        maud::components::Body::Static(#bodystr)
+                    });
+                } else {
+                    // TokenStream not empty, body is dynamic
+                    let tokens = build.finish();
+                    let output_ident = &self.output_ident;
+
+                    parent_build.push_tokens(quote_spanned! {span=>
+                        maud::components::Body::Dynamic(&|mut #output_ident: &mut String| { #tokens })
+                    });
+                }
+            }
+        }
+    }
+
+    fn component_properties(&self, attrs: Vec<Attribute>) -> Option<TokenStream> {
+        let (_, id_attr, attrs) = split_attrs(attrs);
+        if attrs.is_empty() && let None = id_attr {
             return None;
         }
 
@@ -150,30 +186,6 @@ impl Generator {
             };
 
             propertieses.push_tokens(ts);
-        }
-
-        if let ElementBody::Block(block) = component.body {
-            let mut build = self.builder();
-            let span = block.span();
-            
-            self.markups(block.markups, &mut build);
-
-            if build.tokens.is_empty() {
-                // TokenStream is empty, meaning cut() was never called, so body must be a static string
-                // so lets avoid dynamic dispatch
-                let bodystr = LitStr::new(&build.tail, span);
-                propertieses.push_tokens(quote_spanned! {span=>
-                    body: maud::ComponentBody::Static(#bodystr).into(),
-                });
-            } else {
-                // TokenStream not empty, body is dynamic
-                let tokens = build.finish();
-                let output_ident = &self.output_ident;
-
-                propertieses.push_tokens(quote_spanned! {span=>
-                    body: maud::ComponentBody::Dynamic(&|mut #output_ident: &mut String| { #tokens }).into(),
-                });
-            }
         }
 
         #[cfg(feature = "default-fields")] {

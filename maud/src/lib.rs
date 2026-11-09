@@ -25,6 +25,9 @@ extern crate std;
 #[cfg(feature = "json")]
 pub mod json;
 
+#[cfg(feature = "components")]
+pub mod components;
+
 /// An adapter that escapes HTML special characters.
 ///
 /// The following characters are escaped:
@@ -286,26 +289,6 @@ impl<T: Default> Default for PreEscaped<T> {
 
 pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
-pub enum ComponentBody<'a> {
-    Static(&'static str),
-    Dynamic(&'a dyn Fn(&mut String))
-}
-
-impl Render for ComponentBody<'_> {
-    fn render_to(&self, buffer: &mut String) {
-        match self {
-            ComponentBody::Static(str) => buffer.push_str(str),
-            ComponentBody::Dynamic(body) => body(buffer)
-        }
-    }
-}
-
-impl Into<Markup> for ComponentBody<'_> {
-    fn into(self) -> Markup {
-        self.render()
-    }
-}
-
 #[cfg(feature = "rocket")]
 mod rocket_support {
     extern crate std;
@@ -457,7 +440,7 @@ mod salvo_support {
 
 #[doc(hidden)]
 pub mod macro_private {
-    use crate::{ComponentBody, Render, display};
+    use crate::{Render, display};
     use alloc::string::String;
     use core::fmt::Display;
 
